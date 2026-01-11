@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Match - Pro Logic</title>
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --card-color: #16213e;
+            --tile-color: #0f3460;
+            --accent-color: #e94560;
+            --success-color: #4ef037;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 { font-size: 2.2rem; margin-bottom: 10px; letter-spacing: 2px; text-transform: uppercase; }
+
+        .controls { margin-bottom: 20px; text-align: center; }
+
+        button {
+            background-color: var(--accent-color);
+            color: white; border: none; padding: 10px 25px;
+            font-size: 1rem; font-weight: bold; border-radius: 8px;
+            cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        #game-board { 
+            display: grid; gap: 12px; justify-content: center; cursor: default;
+        }
+
+        .image-box {
+            width: 140px; height: 140px; position: relative;
+            background-color: var(--card-color); border: 2px solid #333;
+            display: grid; grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr); overflow: hidden; border-radius: 6px;
+        }
+
+        @keyframes shakeRed {
+            0% { transform: translateX(0); border-color: #333; }
+            25% { transform: translateX(-8px); border-color: var(--accent-color); }
+            50% { transform: translateX(8px); border-color: var(--accent-color); }
+            75% { transform: translateX(-8px); border-color: var(--accent-color); }
+            100% { transform: translateX(0); border-color: #333; }
+        }
+
+        .mismatch-shake { animation: shakeRed 0.5s ease-in-out; z-index: 20; }
+
+        .full-image { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+
+        .tile {
+            position: relative; z-index: 10; background-color: var(--tile-color);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; color: rgba(255, 255, 255, 0.4);
+            cursor: pointer; user-select: none; transition: opacity 0.5s ease;
+        }
+
+        .tile.revealed { opacity: 0; pointer-events: none; }
+        .image-box.matched { border-color: var(--success-color); pointer-events: none; box-shadow: 0 0 15px var(--success-color); }
+        #status { font-weight: bold; margin-top: 5px; font-size: 1.1rem; color: #aaa; }
+        .hint { font-size: 0.8rem; color: #666; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>Memory Match</h1>
+    <div class="controls">
+        <button onclick="initGame()">Shuffle & Restart</button>
+        <div id="status">Pairs found: 0 / 12</div>
+        <div class="hint">Tip: Double-click a box to close it and mute the sound.</div>
+    </div>
+    
+    <div id="game-board" ondblclick="stopSounds(event)"></div>
+
+    <audio id="sound-success" src="sounds/success.mp3" preload="auto"></audio>
+    <audio id="sound-fail" src="sounds/fail.mp3" preload="auto"></audio>
+
+
+    <script>
+        const imageFiles = ['img01.jpg', 'img02.jpg', 'img03.jpg', 'img04.jpg', 'img05.jpg', 'img06.jpg', 'img07.jpg', 'img08.jpg', 'img09.jpg', 'img10.jpg', 'img11.jpg', 'img12.jpg'];
+        const board = document.getElementById('game-board');
+        const statusDisplay = document.getElementById('status');
+        const successSound = document.getElementById('sound-success');
+        const failSound = document.getElementById('sound-fail');
+
+        let firstSelection = null, secondSelection = null, isProcessing = false, pairsFound = 0;
+        const totalTilesPerBox = 4; 
+        let currentFailTimeout = null;
+
+        function initGame() {
+            board.innerHTML = '';
+            firstSelection = null; secondSelection = null; isProcessing = false; pairsFound = 0;
+            updateStatus();
+            let gameData = [...imageFiles, ...imageFiles].sort(() => Math.random() - 0.5);
+            updateGridLayout();
+
+            gameData.forEach((imgSrc, boxIdx) => {
+                const box = document.createElement('div');
+                box.className = 'image-box';
+                box.dataset.img = imgSrc;
+                box.dataset.revealedTiles = 0;
+
+                const img = document.createElement('img');
+                img.src = `images/${imgSrc}`;
+                img.className = 'full-image';
+                box.appendChild(img);
+
+                for (let t = 1; t <= totalTilesPerBox; t++) {
+                    const tile = document.createElement('div');
+                    tile.className = 'tile';
+                    tile.innerText = `${boxIdx + 1}.${t}`;
+                    tile.onclick = (e) => handleTileClick(e, box);
+                    box.appendChild(tile);
+                }
+                board.appendChild(box);
+            });
+        }
+
+        function handleTileClick(e, box) {
+            if (isProcessing || box.classList.contains('matched')) return;
+            const tile = e.target;
+            if (tile.classList.contains('revealed')) return;
+
+            tile.classList.add('revealed');
+            box.dataset.revealedTiles = parseInt(box.dataset.revealedTiles) + 1;
+            if (parseInt(box.dataset.revealedTiles) === totalTilesPerBox) checkMatch(box);
+        }
+
+        function checkMatch(box) {
+            if (!firstSelection) {
+                firstSelection = box;
+                firstSelection.style.pointerEvents = "none";
+            } else {
+                isProcessing = true;
+                secondSelection = box;
+                if (firstSelection.dataset.img === secondSelection.dataset.img) {
+                    successSound.play();
+                    firstSelection.classList.add('matched'); secondSelection.classList.add('matched');
+                    pairsFound++; updateStatus();
+                    if (pairsFound === imageFiles.length) setTimeout(() => alert("Victory!"), 500);
+                    resetTurn();
+                } else {
+                    failSound.play();
+                    firstSelection.classList.add('mismatch-shake'); secondSelection.classList.add('mismatch-shake');
+                    
+                    // Assign to variable so manualReset can cancel it
+                    currentFailTimeout = setTimeout(() => {
+                        if(firstSelection) firstSelection.classList.remove('mismatch-shake'); 
+                        if(secondSelection) secondSelection.classList.remove('mismatch-shake');
+                        resetBox(firstSelection); resetBox(secondSelection);
+                        resetTurn();
+                    }, 1000); 
+                }
+            }
+        }
+
+
+
+        function resetBox(box) {
+            if(!box) return;
+            box.dataset.revealedTiles = 0;
+            box.querySelectorAll('.tile').forEach(t => t.classList.remove('revealed'));
+            box.style.pointerEvents = "auto";
+        }
+
+        function resetTurn() { firstSelection = null; secondSelection = null; isProcessing = false; currentFailTimeout = null; }
+
+        /**
+         * UPDATED STOP SOUNDS (Targeted Manual Reset)
+         */
+        function stopSounds(event) { 
+            // 1. Soft-Stop Logic for Fail Sound
+            if (!failSound.paused) {
+                failSound.volume = 0.2;
+                setTimeout(() => {
+                    failSound.pause();
+                    failSound.currentTime = 0;
+                    failSound.volume = 1.0;
+                }, 200);
+            }
+            successSound.pause(); successSound.currentTime = 0;
+
+            // 2. Identify the specific box clicked
+            const targetedBox = event.target.closest('.image-box');
+            
+            if (targetedBox && !targetedBox.classList.contains('matched')) {
+                // Hide only this box's tiles
+                resetBox(targetedBox);
+
+                // Update game state logic
+                if (targetedBox === firstSelection) {
+                    firstSelection = null;
+                    isProcessing = false;
+                } else if (targetedBox === secondSelection) {
+                    secondSelection = null;
+                    isProcessing = false;
+                    clearTimeout(currentFailTimeout);
+                }
+            }
+        }
+
+        function updateStatus() { statusDisplay.innerText = `Pairs found: ${pairsFound} / ${imageFiles.length}`; }
+
+        function updateGridLayout() {
+            const cols = window.innerWidth < 600 ? 3 : (window.innerWidth < 900 ? 4 : 6);
+            board.style.gridTemplateColumns = `repeat(${cols}, 140px)`;
+        }
+
+        initGame();
+        window.addEventListener('resize', updateGridLayout);
+
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+
+# VSCode
+.vscode/
+
+# Responses & local artifacts
+response.html
+response2.html
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs
+npm-debug.log
