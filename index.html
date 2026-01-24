@@ -77,6 +77,13 @@
 
     <h1>Memory Match</h1>
     <div class="controls">
+        <div style="margin-bottom: 12px;">
+            <label style="font-weight: bold; margin-right: 10px;">Difficulty:</label>
+            <button onclick="setDifficulty(4)" id="btn-easy" style="margin-right: 8px;">Easy (4 pairs)</button>
+            <button onclick="setDifficulty(8)" id="btn-medium" style="margin-right: 8px;">Medium (8 pairs)</button>
+            <button onclick="setDifficulty(12)" id="btn-hard" style="margin-right: 8px;" style="background-color: var(--accent-color);">Hard (12 pairs)</button>
+            <button onclick="setDifficulty(24)" id="btn-extreme">Extreme (24 pairs)</button>
+        </div>
         <button onclick="initGame()">Shuffle & Restart</button>
         <div id="status">Pairs found: 0 / 12</div>
         <div class="hint">Tip: Double-click a box to close it and mute the sound.</div>
@@ -98,12 +105,33 @@
         let firstSelection = null, secondSelection = null, isProcessing = false, pairsFound = 0;
         const totalTilesPerBox = 4; 
         let currentFailTimeout = null;
+        let selectedPairs = 12; // default difficulty
+
+        function shuffleArray(arr) {
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function setDifficulty(pairs) {
+            selectedPairs = pairs;
+            // Update button styles
+            document.getElementById('btn-easy').style.backgroundColor = pairs === 4 ? 'var(--accent-color)' : '';
+            document.getElementById('btn-medium').style.backgroundColor = pairs === 8 ? 'var(--accent-color)' : '';
+            document.getElementById('btn-hard').style.backgroundColor = pairs === 12 ? 'var(--accent-color)' : '';
+            document.getElementById('btn-extreme').style.backgroundColor = pairs === 24 ? 'var(--accent-color)' : '';
+            initGame();
+        }
 
         function initGame() {
             board.innerHTML = '';
             firstSelection = null; secondSelection = null; isProcessing = false; pairsFound = 0;
-            updateStatus();
-            let gameData = [...imageFiles, ...imageFiles].sort(() => Math.random() - 0.5);
+            // Select only the needed pairs from available images
+            const selectedImages = imageFiles.slice(0, Math.min(selectedPairs, imageFiles.length));
+            statusDisplay.innerText = `Pairs found: 0 / ${selectedPairs}`;
+            let gameData = shuffleArray([...selectedImages, ...selectedImages]);
             updateGridLayout();
 
             gameData.forEach((imgSrc, boxIdx) => {
@@ -149,7 +177,7 @@
                     successSound.play();
                     firstSelection.classList.add('matched'); secondSelection.classList.add('matched');
                     pairsFound++; updateStatus();
-                    if (pairsFound === imageFiles.length) setTimeout(() => alert("Victory!"), 500);
+                    if (pairsFound === selectedPairs) setTimeout(() => alert("Victory!"), 500);
                     resetTurn();
                 } else {
                     failSound.play();
@@ -211,7 +239,7 @@
             }
         }
 
-        function updateStatus() { statusDisplay.innerText = `Pairs found: ${pairsFound} / ${imageFiles.length}`; }
+        function updateStatus() { statusDisplay.innerText = `Pairs found: ${pairsFound} / ${selectedPairs}`; }
 
         function updateGridLayout() {
             const cols = window.innerWidth < 600 ? 3 : (window.innerWidth < 900 ? 4 : 6);
