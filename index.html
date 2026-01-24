@@ -47,8 +47,7 @@
         .image-box {
             width: 140px; height: 140px; position: relative;
             background-color: var(--card-color); border: 2px solid #333;
-            display: grid; grid-template-columns: repeat(2, 1fr);
-            grid-template-rows: repeat(2, 1fr); overflow: hidden; border-radius: 6px;
+            display: grid; overflow: hidden; border-radius: 6px;
         }
 
         @keyframes shakeRed {
@@ -114,7 +113,12 @@
         const failSound = document.getElementById('sound-fail');
 
         let firstSelection = null, secondSelection = null, isProcessing = false, pairsFound = 0;
-        const totalTilesPerBox = 4; 
+        const tileLayouts = {
+            'single': { cols: 1, rows: 1, tiles: 1 },
+            '2h': { cols: 2, rows: 1, tiles: 2 },
+            '3h': { cols: 3, rows: 1, tiles: 3 },
+            '4q': { cols: 2, rows: 2, tiles: 4 }
+        };
         let currentFailTimeout = null;
         let selectedPairs = 12; // default difficulty
         let selectedGridStyle = 'single'; // default grid style
@@ -154,80 +158,42 @@
             const selectedImages = imageFiles.slice(0, Math.min(selectedPairs, imageFiles.length));
             statusDisplay.innerText = `Pairs found: 0 / ${selectedPairs}`;
             let gameData = shuffleArray([...selectedImages, ...selectedImages]);
+            updateGridLayout();
 
-            // Determine how many cards per section based on grid style
-            let cardsPerSection = selectedPairs * 2; // total cards
-            let sections = [];
+            const layout = tileLayouts[selectedGridStyle];
+            const totalTilesPerBox = layout.tiles;
 
-            if (selectedGridStyle === 'single') {
-                sections = [gameData]; // all in one
-            } else if (selectedGridStyle === '2h') {
-                sections = [gameData.slice(0, cardsPerSection / 2), gameData.slice(cardsPerSection / 2)];
-            } else if (selectedGridStyle === '3h') {
-                const third = cardsPerSection / 3;
-                sections = [gameData.slice(0, third), gameData.slice(third, 2 * third), gameData.slice(2 * third)];
-            } else if (selectedGridStyle === '4q') {
-                const quarter = cardsPerSection / 4;
-                sections = [
-                    gameData.slice(0, quarter),
-                    gameData.slice(quarter, 2 * quarter),
-                    gameData.slice(2 * quarter, 3 * quarter),
-                    gameData.slice(3 * quarter)
-                ];
-            }
+            gameData.forEach((imgSrc, boxIdx) => {
+                const box = document.createElement('div');
+                box.className = 'image-box';
+                box.dataset.img = imgSrc;
+                box.dataset.revealedTiles = 0;
+                box.style.gridTemplateColumns = `repeat(${layout.cols}, 1fr)`;
+                box.style.gridTemplateRows = `repeat(${layout.rows}, 1fr)`;
 
-            // Create grid sections
-            sections.forEach((sectionData, sectionIdx) => {
-                let gridContainer;
-                if (selectedGridStyle === 'single') {
-                    gridContainer = board;
-                } else {
-                    gridContainer = document.createElement('div');
-                    gridContainer.className = 'grid-section';
-                    board.appendChild(gridContainer);
+                const img = document.createElement('img');
+                img.src = `images/${imgSrc}`;
+                img.className = 'full-image';
+                box.appendChild(img);
+
+                for (let t = 1; t <= totalTilesPerBox; t++) {
+                    const tile = document.createElement('div');
+                    tile.className = 'tile';
+                    tile.innerText = `${boxIdx + 1}.${t}`;
+                    tile.onclick = (e) => handleTileClick(e, box);
+                    box.appendChild(tile);
                 }
-
-                sectionData.forEach((imgSrc, boxIdx) => {
-                    const box = document.createElement('div');
-                    box.className = 'image-box';
-                    box.dataset.img = imgSrc;
-                    box.dataset.revealedTiles = 0;
-
-                    const img = document.createElement('img');
-                    img.src = `images/${imgSrc}`;
-                    img.className = 'full-image';
-                    box.appendChild(img);
-
-                    for (let t = 1; t <= totalTilesPerBox; t++) {
-                        const tile = document.createElement('div');
-                        tile.className = 'tile';
-                        tile.innerText = `${boxIdx + 1}.${t}`;
-                        tile.onclick = (e) => handleTileClick(e, box);
-                        box.appendChild(tile);
-                    }
-                    gridContainer.appendChild(box);
-                });
-
-                // Apply grid layout to each section
-                if (selectedGridStyle !== 'single') {
-                    gridContainer.style.display = 'grid';
-                    gridContainer.style.gridTemplateColumns = 'repeat(4, 140px)';
-                    gridContainer.style.gap = '12px';
-                    gridContainer.style.justifyContent = 'center';
-                } else {
-                    updateGridLayout();
-                }
+                board.appendChild(box);
             });
-
-            if (selectedGridStyle === 'single') {
-                updateGridLayout();
-            }
         }
 
         function handleTileClick(e, box) {
             if (isProcessing || box.classList.contains('matched')) return;
             const tile = e.target;
             if (tile.classList.contains('revealed')) return;
+
+            const layout = tileLayouts[selectedGridStyle];
+            const totalTilesPerBox = layout.tiles;
 
             tile.classList.add('revealed');
             box.dataset.revealedTiles = parseInt(box.dataset.revealedTiles) + 1;
